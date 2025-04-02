@@ -1,0 +1,31 @@
+// en.lproj/Localizable.strings
+
+/* Prompt to add passport */
+"Добавьте паспорт в 'Мои паспорта'" = "Add a passport in 'My Passports'";
+
+/* Prompt to select passport */
+"Выберите паспорт, чтобы увидеть доступные страны" = "Select a passport to see available countries";
+
+/* Passport field title */
+"Паспорт" = "Passport";
+
+/* Action sheet title for passport selection */
+"Выберите паспорт" = "Select Passport";
+
+/* Default passport name */
+"Без названия" = "No Name";
+
+/* Header for countries screen */
+"Страны" = "Countries";
+
+/* Visa category */
+"Без визы" = "Visa Free";
+
+/* Visa category */
+"Виза по прибытии" = "Visa on Arrival";
+
+/* Visa category */
+"Электронная виза" = "E-Visa";
+
+/* Visa category */
+"Требуется виза" = "Visa Required";
