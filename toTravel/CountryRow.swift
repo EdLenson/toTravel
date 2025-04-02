@@ -1,13 +1,14 @@
 import SwiftUI
 import SwiftData
 
-// CountryRow.swift
 struct CountryRow: View {
     let country: CountryAccess
     let countriesManager: CountriesManager
     let showDays: Bool
     @State private var flagImage: UIImage? = nil
     @State private var flagLoadError: Bool = false
+    
+    @Environment(\.colorScheme) var colorScheme
     
     private func flagURL(for countryCode: String) -> URL? {
         let code = countryCode.lowercased()
@@ -67,44 +68,46 @@ struct CountryRow: View {
     }
     
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: Theme.Tiles.spacing) {
             if flagImage == nil && !flagLoadError {
                 Color.gray
-                    .frame(width: 48, height: 48)
+                    .frame(width: 32, height: 32)
             } else if flagLoadError {
                 Color.gray
-                    .frame(width: 48, height: 48)
-                    .overlay(
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.red)
-                    )
+                    .frame(width: 32, height: 32)
             } else if let image = flagImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 48)
+                    .frame(width: 32, height: 32)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(countriesManager.getName(forCode: country.destination))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(Color(hex: "#1C1C1C"))
+                    .font(Theme.Fonts.countryTitle)
+                    .foregroundColor(Theme.Colors.text(for: colorScheme))
                 
                 if showDays {
                     Text(daysText)
-                        .font(.system(size: 14))
-                        .foregroundColor(Color(hex: "#9393A8"))
+                        .font(Theme.Fonts.countrySubtitle)
+                        .foregroundColor(Theme.Colors.secondary)
                 }
             }
             
             Spacer()
         }
-        .padding(.horizontal, 32)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white)
-        .cornerRadius(64)
-        .shadow(color: Color(red: 0.11, green: 0.11, blue: 0.18).opacity(0.02), radius: 9, x: 0, y: 5)
+        .padding(.horizontal, Theme.Tiles.horizontalPadding)
+        .padding(.vertical, Theme.Tiles.verticalPadding)
+        .frame(maxWidth: .infinity,
+               minHeight: Theme.Tiles.height,
+               maxHeight: Theme.Tiles.height,
+               alignment: .leading)
+        .background(Theme.Colors.surface(for: colorScheme))
+        .cornerRadius(Theme.Tiles.cornerRadius)
+        .shadow(color: Theme.Tiles.shadowColor,
+                radius: Theme.Tiles.shadowRadius,
+                x: Theme.Tiles.shadowX,
+                y: Theme.Tiles.shadowY)
         .onAppear {
             loadFlagImage()
         }
@@ -115,4 +118,3 @@ struct CountryRow: View {
         }
     }
 }
-

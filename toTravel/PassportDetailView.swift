@@ -1,18 +1,11 @@
-//  PassportDetailView.swift
-//  toTravel
-//
-//  Created by Ed on 3/21/25.
-//
-
 import SwiftUI
 import SwiftData
 
 struct PassportDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     let passport: Passport
     @Binding var isPresented: Bool
-    @Binding var isExpanded: Bool
-    let currentHeight: CGFloat
     @ObservedObject private var countriesManager = CountriesManager.shared
     
     @State private var isShowingEditView: Bool = false
@@ -38,7 +31,11 @@ struct PassportDetailView: View {
         
         if passport.expiryDate >= Date.distantFuture { return nil }
         
-        if monthsLeft < 6 && monthsLeft >= 0 {
+        if expiry < today {
+            return "Недействителен"
+        } else if expiry == today {
+            return "Истекает сегодня"
+        } else if monthsLeft < 6 {
             if monthsLeft > 1 {
                 return "Истекает через \(monthsLeft) мес. \(daysLeft) дн."
             } else if monthsLeft == 1 {
@@ -53,27 +50,34 @@ struct PassportDetailView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            Text(passport.customName)
-                .font(.title2)
-                .bold()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 16)
-                .padding(.leading, 16)
-                .padding(.bottom, 32)
-            
-            HStack(spacing: 16) {
-                ActionButton(icon: "square.and.arrow.up", title: "Поделиться") {
-                    sharePassport()
+            VStack(spacing: 0) {
+                Text(passport.customName)
+                    .font(.title2)
+                    .bold()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                
+                HStack(spacing: 16) {
+                    ActionButton(icon: "share", title: "Поделиться") {
+                        sharePassport()
+                    }
+                    .frame(width: 80, alignment: .center)
+                    
+                    ActionButton(icon: "edit", title: "Изменить") {
+                        isShowingEditView = true
+                    }
+                    .frame(width: 80, alignment: .center)
+                    
+                    ActionButton(icon: "delete", title: "Удалить") {
+                        showingDeleteConfirmation = true
+                    }
+                    .frame(width: 80, alignment: .center)
                 }
-                ActionButton(icon: "pencil", title: "Редактировать") {
-                    isShowingEditView = true
-                }
-                ActionButton(icon: "trash", title: "Удалить", color: .red) {
-                    showingDeleteConfirmation = true
-                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 32)
+            .background(Theme.Colors.background(for: colorScheme))
             
             VStack(alignment: .leading, spacing: 16) {
                 InfoField(label: "Тип паспорта", value: passport.type)
@@ -84,7 +88,7 @@ struct PassportDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
                 if let expirationText = daysUntilExpiration {
-                    InfoField(label: "Предупреждение", value: expirationText, valueColor: .red)
+                    InfoField(label: "Предупреждение", value: expirationText, valueColor: Theme.Colors.expiring)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 
@@ -92,13 +96,14 @@ struct PassportDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.top, 16)
+            .background(Theme.Colors.surface(for: colorScheme))
             
             Spacer()
         }
-        .background(Color(.systemBackground))
         .sheet(isPresented: $isShowingEditView) {
             EditPassportView(isShowingEditPassportView: $isShowingEditView, passport: passport)
+            .presentationDetents([.large])
         }
         .alert(isPresented: $showingDeleteConfirmation) {
             Alert(
@@ -128,13 +133,4 @@ struct PassportDetailView: View {
         try? modelContext.save()
         isPresented = false
     }
-}
-
-#Preview {
-    PassportDetailView(
-        passport: Passport(customName: "Test", issuingCountry: "RU", expiryDate: Date(), type: "Заграничный"),
-        isPresented: .constant(true),
-        isExpanded: .constant(false),
-        currentHeight: 0.7
-    )
 }

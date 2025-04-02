@@ -1,58 +1,41 @@
-//
-//  CountryPickerView.swift
-//  toTravel
-//
-//  Created by Ed on 3/21/25.
-//
-
 import SwiftUI
 
 struct CountryList: View {
-    @Binding var selectedCountry: String
+    @Binding var selectedCountry: String // Это будет название страны, возвращаемое пользователю
     @Binding var isShowing: Bool
     @StateObject private var countriesManager = CountriesManager.shared
     @State private var searchText = ""
-    @State private var flagImages: [String: UIImage] = [:]
+    @State private var flagImages: [String: UIImage] = [:] // Ключ — код страны (cca2)
     
     var filteredCountries: [String] {
         if searchText.isEmpty {
-            return countriesManager.countries
+            return countriesManager.countryNames
         } else {
-            return countriesManager.countries.filter { $0.lowercased().contains(searchText.lowercased()) }
+            return countriesManager.countryNames.filter { $0.lowercased().contains(searchText.lowercased()) }
         }
     }
     
-    private func flagURL(for country: String) -> URL? {
-        if let code = countriesManager.getCode(for: country)?.lowercased() {
-            let urlString = "https://flagcdn.com/w320/\(code).png"
-            print("Формирую URL для \(country): \(urlString)")
-            return URL(string: urlString)
-        }
-        print("Код не найден для страны \(country)")
-        return nil
-    }
-    
-    private func loadFlagImage(for country: String) {
-        guard let code = countriesManager.getCode(for: country),
-              let url = flagURL(for: country) else {
-            print("Ошибка: код страны или URL недоступны для \(country)")
+    private func loadFlagImage(forCode code: String) {
+        let lowerCode = code.lowercased()
+        guard let url = countriesManager.getFlagURL(forCode: code) else {
+            print("Ошибка: URL флага недоступен для кода \(code)")
             return
         }
         
         let fileManager = FileManager.default
         let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let fileURL = cachesDirectory.appendingPathComponent("\(code).png")
+        let fileURL = cachesDirectory.appendingPathComponent("\(lowerCode).png")
         
-        if let cachedImage = flagImages[country] {
-            print("Флаг для \(country) найден в памяти")
+        if let cachedImage = flagImages[lowerCode] {
+            print("Флаг для кода \(code) найден в памяти")
             return
         }
         
         if fileManager.fileExists(atPath: fileURL.path) {
             if let image = UIImage(contentsOfFile: fileURL.path) {
                 DispatchQueue.main.async {
-                    self.flagImages[country] = image
-                    print("Флаг загружен с диска для \(country)")
+                    self.flagImages[lowerCode] = image
+                    print("Флаг загружен с диска для кода \(code)")
                 }
                 return
             } else {
@@ -77,8 +60,8 @@ struct CountryList: View {
             }
             
             DispatchQueue.main.async {
-                self.flagImages[country] = image
-                print("Флаг загружен из сети для \(country)")
+                self.flagImages[lowerCode] = image
+                print("Флаг загружен из сети для кода \(code)")
                 do {
                     try data.write(to: fileURL)
                     print("Флаг сохранён на диск: \(fileURL.path)")
@@ -94,11 +77,12 @@ struct CountryList: View {
             VStack {
                 List(filteredCountries, id: \.self) { country in
                     Button(action: {
-                        selectedCountry = country
+                        selectedCountry = country // Возвращаем название страны
                         isShowing = false
                     }) {
                         HStack(spacing: 8) {
-                            if let image = flagImages[country] {
+                            if let code = countriesManager.getCode(for: country),
+                               let image = flagImages[code.lowercased()] {
                                 Image(uiImage: image)
                                     .resizable()
                                     .scaledToFit()
@@ -107,7 +91,9 @@ struct CountryList: View {
                                 Color.gray
                                     .frame(width: 20, height: 15)
                                     .onAppear {
-                                        loadFlagImage(for: country)
+                                        if let code = countriesManager.getCode(for: country) {
+                                            loadFlagImage(forCode: code)
+                                        }
                                     }
                             }
                             Text(country)
@@ -138,4 +124,8 @@ struct CountryList: View {
             }
         }
     }
+}
+
+#Preview {
+    CountryList(selectedCountry: .constant("Россия"), isShowing: .constant(true))
 }

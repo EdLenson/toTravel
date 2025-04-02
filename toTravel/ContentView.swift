@@ -1,224 +1,212 @@
-//
-//  ContentView.swift
-//  toTravel
-//
-//  Created by Ed on 3/21/25.
-//
-
 import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    // MARK: - Environment and State
     @Environment(\.modelContext) private var modelContext
-    @State private var selectedTab = 0
-    @State private var selectedPassport: Passport?
-    @State private var selectedVisa: Visa?
-    @State private var isSheetVisible: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
     
-    private let sheetHeight: CGFloat = 0.7 // Фиксированная высота 60% для всех плашек
+    @State private var selectedTab: Int = 0
+    @State private var selectedPassportForDetail: Passport?
+    @State private var selectedVisaForDetail: Visa?
+    @State private var showPassportDetail: Bool = false
+    @State private var showVisaDetail: Bool = false
+    @State private var passportRotation: Double = 0
+    @State private var planeOffset: CGSize = .zero
+    @State private var planeOpacity: Double = 1.0
     
-    init() {
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = .white
-        appearance.shadowColor = .clear
-        appearance.shadowImage = UIImage()
-        
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
-    }
-    
+    // MARK: - Body
     var body: some View {
         GeometryReader { geometry in
-            TabView(selection: $selectedTab) {
-                MyPassportsView(selectedPassport: $selectedPassport)
-                    .tabItem {
-                        Image(systemName: "person.text.rectangle")
-                        Text("Мои паспорта")
-                    }
-                    .tag(0)
-                    .onAppear {
-                        print("Tab 0 (Passports) appeared")
-                    }
-                
-                MyVisasView(selectedVisa: $selectedVisa)
-                    .tabItem {
-                        Image(systemName: "airplane")
-                        Text("Мои визы")
-                    }
-                    .tag(1)
-                    .onAppear {
-                        print("Tab 1 (Visas) appeared")
-                    }
-                
-                MyCountriesView()
-                    .tabItem {
-                        Image(systemName: "globe")
-                        Text("Мои страны")
-                    }
-                    .tag(2)
-                    .onAppear {
-                        print("Tab 2 (Countries) appeared")
-                    }
+            ZStack(alignment: .bottom) {
+                // Основной контент с сохранением состояния
+                ZStack {
+                    documentsView
+                    countriesView
+                }
+                navigationBar
+                modalOverlay
+                passportDetailSheet
+                visaDetailSheet
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            .ignoresSafeArea(.all, edges: .bottom)
+            .background(Theme.Colors.background(for: colorScheme))
+            .accentColor(Theme.Colors.primary)
+        }
+        .ignoresSafeArea(.all, edges: .bottom)
+        .background(Theme.Colors.background(for: colorScheme))
+    }
+    
+    // MARK: - UI Components
+    
+    /// Экран "Мои документы"
+    private var documentsView: some View {
+        MyDocumentsView(
+            selectedPassportForDetail: $selectedPassportForDetail,
+            selectedVisaForDetail: $selectedVisaForDetail
+        )
+        .opacity(selectedTab == 0 ? 1.0 : 0.0)
+        .zIndex(selectedTab == 0 ? 1 : 0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.Colors.background(for: colorScheme))
+        .onChange(of: selectedPassportForDetail) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showPassportDetail = newValue != nil
+            }
+        }
+        .onChange(of: selectedVisaForDetail) { _, newValue in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showVisaDetail = newValue != nil
+            }
+        }
+    }
+    
+    /// Экран "Мои страны"
+    private var countriesView: some View {
+        MyCountriesView()
+            .opacity(selectedTab == 1 ? 1.0 : 0.0)
+            .zIndex(selectedTab == 1 ? 1 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.Colors.background(for: colorScheme))
+    }
+    
+    /// Навигационная панель с кнопками
+    private var navigationBar: some View {
+        ZStack(alignment: .bottom) {
+            HStack(alignment: .top, spacing: 16) {
+                passportButton
+                countriesButton
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .preference(key: TabViewFrameKey.self, value: proxy.frame(in: .global))
+                ZStack {
+                    backgroundForScheme
+                    selectionIndicator
                 }
             )
-            .onPreferenceChange(TabViewFrameKey.self) { frame in
-                print("TabView frame updated: \(frame)")
+            .clipShape(Capsule())
+            .shadow(
+                color: Theme.Tiles.shadowColor,
+                radius: Theme.Tiles.shadowRadius,
+                x: Theme.Tiles.shadowX,
+                y: Theme.Tiles.shadowY
+            )
+            .padding(.bottom, 64)
+        }
+        .zIndex(2)
+    }
+    
+    /// Кнопка для перехода к паспортам
+    private var passportButton: some View {
+        Button(action: {
+            if selectedTab != 0 {
+                selectedTab = 0
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    passportRotation += 180
+                }
             }
-            .toolbar(isSheetVisible ? .hidden : .visible, for: .tabBar)
-            .customSheet(
-                isPresented: Binding(
-                    get: { selectedPassport != nil || selectedVisa != nil },
-                    set: { if !$0 { selectedPassport = nil; selectedVisa = nil } }
+        }) {
+            Image(selectedTab == 0 ? "passport_active" : "passport_inactive")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+                .foregroundColor(selectedTab == 0 ? Theme.Colors.primary : Theme.Colors.secondary)
+                .padding(8)
+                .rotation3DEffect(
+                    .degrees(passportRotation),
+                    axis: (x: 0, y: 1, z: 0)
                 )
-            ) {
-                Group {
-                    if let passport = selectedPassport {
-                        PassportDetailView(
-                            passport: passport,
-                            isPresented: Binding(
-                                get: { selectedPassport != nil },
-                                set: { if !$0 { selectedPassport = nil } }
-                            ),
-                            isExpanded: .constant(false),
-                            currentHeight: sheetHeight
-                        )
-                        .onAppear {
-                            print("Passport sheet appeared: \(passport.customName)")
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isSheetVisible = true
-                            }
-                        }
-                    } else if let visa = selectedVisa {
-                        VisaDetailView(
-                            visa: visa,
-                            isPresented: Binding(
-                                get: { selectedVisa != nil },
-                                set: { if !$0 { selectedVisa = nil } }
-                            ),
-                            isExpanded: .constant(false),
-                            currentHeight: sheetHeight
-                        )
-                        .onAppear {
-                            print("Visa sheet appeared: \(visa.customName)")
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isSheetVisible = true
-                            }
-                        }
-                    }
-                }
-            }
-            .onChange(of: selectedPassport) { oldValue, newValue in
-                print("selectedPassport changed: \(oldValue?.customName ?? "nil") -> \(newValue?.customName ?? "nil")")
-            }
-            .onChange(of: selectedVisa) { oldValue, newValue in
-                print("selectedVisa changed: \(oldValue?.customName ?? "nil") -> \(newValue?.customName ?? "nil")")
-            }
-            .onChange(of: isSheetVisible) { oldValue, newValue in
-                print("isSheetVisible changed: \(oldValue) -> \(newValue)")
-                if !newValue {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        selectedPassport = nil
-                        selectedVisa = nil
-                        print("Sheet closed, selectedPassport: \(selectedPassport?.customName ?? "nil"), selectedVisa: \(selectedVisa?.customName ?? "nil")")
-                    }
-                }
-            }
         }
     }
-}
-
-struct TabViewFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
-    }
-}
-
-// Кастомный модификатор для плашки
-struct CustomSheetModifier<SheetContent: View>: ViewModifier {
-    @Binding var isPresented: Bool
-    let content: () -> SheetContent
     
-    private let sheetHeight: CGFloat = 0.7 // Фиксированная высота 60%
-    @State private var sheetOffset: CGFloat = 0 // Управление позицией
-    
-    init(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> SheetContent) {
-        self._isPresented = isPresented
-        self.content = content
-        self._sheetOffset = State(initialValue: isPresented.wrappedValue ? 0 : 1000) // Начальное значение за экраном
-    }
-    
-    func body(content: Content) -> some View {
-        ZStack(alignment: .bottom) {
-            content
-            
-            GeometryReader { geometry in
-                // Затемнение фона
-                Color.black
-                    .opacity(isPresented ? 0.5 : 0)
-                    .frame(width: geometry.size.width, height: geometry.size.height + geometry.safeAreaInsets.bottom)
-                    .offset(y: -geometry.safeAreaInsets.top)
-                    .onTapGesture {
+    /// Кнопка для перехода к странам
+    private var countriesButton: some View {
+            Button(action: {
+                if selectedTab != 1 {
+                    selectedTab = 1
+                    withAnimation(.easeInOut(duration: 0.8)) {
+                        planeOffset = CGSize(width: 44, height: -44)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        planeOffset = CGSize(width: -44, height: 44)
+                        planeOpacity = 0.0
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            isPresented = false
+                            planeOffset = .zero
+                            planeOpacity = 1.0
                         }
                     }
-                    .animation(.easeInOut(duration: 0.2), value: isPresented)
-                    .ignoresSafeArea()
-                    .zIndex(1) // Затемнение под плашкой
-                
-                // Плашка
-                VStack {
-                    Spacer() // Привязываем плашку к нижней части
-                    self.content()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: geometry.size.height * sheetHeight) // Фиксированная высота
-                        .background(Color(.systemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .offset(y: sheetOffset) // Управление движением
-                        .gesture(
-                            DragGesture()
-                                .onEnded { value in
-                                    let translation = value.translation.height
-                                    if translation > 50 {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            isPresented = false
-                                        }
-                                    }
-                                }
-                        )
-                        .opacity(1.0) // Явно фиксируем непрозрачность плашки
                 }
-                .ignoresSafeArea() // Поверх всего, включая tab bar
-                .onChange(of: isPresented) { oldValue, newValue in
-                    print("Sheet offset changing to: \(newValue ? 0 : geometry.size.height * sheetHeight)")
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        sheetOffset = newValue ? 0 : geometry.size.height * sheetHeight // Анимация снизу
+            }) {
+                Image(selectedTab == 1 ? "countries_active" : "countries_inactive")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .foregroundColor(selectedTab == 1 ? Theme.Colors.primary : Theme.Colors.secondary)
+                    .padding(8)
+                    .frame(width: 44, height: 44)
+                    .offset(planeOffset)
+                    .opacity(planeOpacity)
+                    .clipShape(Circle())
+                    .clipped()
+            }        }
+    
+    /// Фон навигационной панели в зависимости от темы
+    private var backgroundForScheme: some View {
+        colorScheme == .dark ? Theme.Colors.alternateBackground(for: colorScheme) : Theme.Colors.surface(for: colorScheme)
+    }
+    
+    /// Индикатор выбранной вкладки с анимацией
+    private var selectionIndicator: some View {
+        Circle()
+            .frame(width: 44, height: 44)
+            .foregroundColor(Theme.Colors.primary.opacity(0.14))
+            .offset(x: selectedTab == 0 ? -30 : 30, y: 0)
+            .animation(.easeInOut(duration: 0.2), value: selectedTab) // Анимация только для индикатора
+    }
+    
+    /// Полупрозрачный фон для модальных окон
+    private var modalOverlay: some View {
+        Group {
+            if showPassportDetail || showVisaDetail {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea(.all)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showPassportDetail = false
+                            showVisaDetail = false
+                        }
                     }
-                }
-                .zIndex(2) // Плашка поверх затемнения
+                    .zIndex(2.5)
+                    .transition(.opacity)
             }
         }
     }
-}
-
-extension View {
-    func customSheet<Content: View>(
-        isPresented: Binding<Bool>,
-        @ViewBuilder content: @escaping () -> Content
-    ) -> some View {
-        self.modifier(CustomSheetModifier(isPresented: isPresented, content: content))
+    
+    /// Модальное окно для детального просмотра паспорта
+    private var passportDetailSheet: some View {
+        Group {
+            if showPassportDetail, let passport = selectedPassportForDetail {
+                CustomDetailSheet(isPresented: $showPassportDetail) {
+                    PassportDetailView(passport: passport, isPresented: $showPassportDetail)
+                }
+                .transition(.move(edge: .bottom))
+                .zIndex(3)
+            }
+        }
     }
-}
-
-#Preview {
-    ContentView()
+    
+    /// Модальное окно для детального просмотра визы
+    private var visaDetailSheet: some View {
+        Group {
+            if showVisaDetail, let visa = selectedVisaForDetail {
+                CustomDetailSheet(isPresented: $showVisaDetail) {
+                    VisaDetailView(visa: visa, isPresented: $showVisaDetail)
+                }
+                .transition(.move(edge: .bottom))
+                .zIndex(3)
+            }
+        }
+    }
 }

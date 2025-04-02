@@ -9,6 +9,9 @@
 /* Passport field title */
 "Паспорт" = "Passport";
 
+/* Visa field title */
+"Виза" = "Visa";
+
 /* Action sheet title for passport selection */
 "Выберите паспорт" = "Select Passport";
 

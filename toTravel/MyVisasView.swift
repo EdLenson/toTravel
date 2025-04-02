@@ -1,15 +1,9 @@
-//
-//  MyVisasView.swift
-//  toTravel
-//
-//  Created by Ed on 3/23/25.
-//
-
 import SwiftUI
 import SwiftData
 
 struct MyVisasView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query private var visas: [Visa]
     @Binding var selectedVisa: Visa?
     @State private var isShowingAddVisaView: Bool = false
@@ -24,60 +18,85 @@ struct MyVisasView: View {
         visas.filter { $0.passport != nil }
     }
     
-    init(selectedVisa: Binding<Visa?>) {
-        self._selectedVisa = selectedVisa
-        
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = .white
-        appearance.shadowColor = .clear
-        appearance.shadowImage = UIImage()
-        
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+    // Сортированные визы
+    private var sortedVisas: [Visa] {
+        validVisas.sorted { visa1, visa2 in
+            let today = Calendar.current.startOfDay(for: Date())
+            let end1 = Calendar.current.startOfDay(for: visa1.endDate)
+            let end2 = Calendar.current.startOfDay(for: visa2.endDate)
+            
+            let monthsLeft1 = Calendar.current.dateComponents([.month], from: today, to: end1).month ?? 0
+            let monthsLeft2 = Calendar.current.dateComponents([.month], from: today, to: end2).month ?? 0
+            
+            let isExpiringSoon1 = monthsLeft1 < 3 || end1 <= today // < 3 месяцев, истекает сегодня или просрочена
+            let isExpiringSoon2 = monthsLeft2 < 3 || end2 <= today
+            
+            // Визы с истекающим сроком выше
+            if isExpiringSoon1 != isExpiringSoon2 {
+                return isExpiringSoon1 && !isExpiringSoon2
+            }
+            // Если обе истекают или обе нормальные, сортируем по дате окончания
+            return end1 < end2
+        }
     }
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    if validVisas.isEmpty {
-                        Text("Нет виз")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 50)
-                    } else {
-                        ForEach(validVisas) { visa in
-                            Button(action: {
-                                selectedVisa = visa
-                                print("Tapped visa: \(visa.customName)")
-                            }) {
-                                VisaTileView(visa: visa, dateFormatter: dateFormatter)
+            ZStack(alignment: .top) {
+                ScrollView {
+                    VStack(spacing: Theme.Tiles.listSpacing) {
+                        Spacer(minLength: 70) // Отступ под плашку
+                        
+                        if validVisas.isEmpty {
+                            Text("Нет виз")
+                                .font(.headline)
+                                .foregroundColor(Theme.Colors.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 50)
+                        } else {
+                            ForEach(sortedVisas) { visa in
+                                Button(action: {
+                                    selectedVisa = visa
+                                }) {
+                                    VisaTileView(visa: visa, dateFormatter: dateFormatter)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
+                        
+                        Button(action: {
+                            isShowingAddVisaView = true
+                        }) {
+                            Text("Добавить визу")
+                                .font(Theme.Fonts.button)
+                                .foregroundColor(Theme.Colors.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Theme.Colors.surface(for: colorScheme))
+                                .clipShape(RoundedRectangle(cornerRadius: Theme.Tiles.cornerRadius))
+                        }
+                        .padding(.top, validVisas.isEmpty ? 0 : Theme.Tiles.spacing)
                     }
-                    
-                    Button(action: {
-                        isShowingAddVisaView = true
-                    }) {
-                        Text("Добавить визу")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    .padding(.top, validVisas.isEmpty ? 0 : 16)
+                    .padding(.horizontal, Theme.Tiles.listEdgePadding)
+                    .padding(.bottom, Theme.Tiles.verticalPadding)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .background(Theme.Colors.background(for: colorScheme))
+                
+                VStack {
+                    Text("Мои визы")
+                        .font(Theme.Fonts.header)
+                        .foregroundColor(Theme.Colors.text(for: colorScheme))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 16)
+                        .padding(.top, 24)
+                        .padding(.bottom, 16)
+                }
+                .background(Theme.Colors.background(for: colorScheme))
+                .frame(maxWidth: .infinity)
             }
-            .navigationTitle("Мои визы")
-            .padding(.top, 16)
-            .navigationBarTitleDisplayMode(.automatic)
+            .safeAreaInset(edge: .top, content: {
+                Color.clear.frame(height: 0)
+            })
             .sheet(isPresented: $isShowingAddVisaView) {
                 AddVisaView(isShowingAddVisaView: $isShowingAddVisaView)
             }

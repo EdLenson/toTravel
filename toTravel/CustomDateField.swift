@@ -32,7 +32,8 @@ struct UnderlinedDateField: View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack(alignment: .leading) {
                 Text(title)
-                    .foregroundColor(isEditing ? Color.blue : .gray)
+                    .font(Theme.Fonts.countryTitle) // Размер 16 из Theme
+                    .foregroundColor(isEditing ? Theme.Colors.primary : Theme.Colors.secondary)
                     .offset(y: isEditing || !activeDateString.wrappedValue.isEmpty ? -25 : 0)
                     .scaleEffect(isEditing || !activeDateString.wrappedValue.isEmpty ? 0.8 : 1, anchor: .leading)
                     .animation(.easeInOut(duration: 0.2), value: isEditing || !activeDateString.wrappedValue.isEmpty)
@@ -40,7 +41,7 @@ struct UnderlinedDateField: View {
                 ZStack(alignment: .leading) {
                     if isEditing && activeDateString.wrappedValue.isEmpty {
                         Text("10.01.2020")
-                            .foregroundColor(.gray)
+                            .foregroundColor(Theme.Colors.secondary)
                     }
                     
                     TextField("", text: activeDateString, onEditingChanged: { editing in
@@ -76,13 +77,13 @@ struct UnderlinedDateField: View {
             .overlay(
                 Rectangle()
                     .frame(height: isEditing ? 2 : 1)
-                    .foregroundColor(isEditing ? Color.blue : Color.gray),
+                    .foregroundColor(isEditing ? Theme.Colors.primary : Theme.Colors.secondary.opacity(0.5)),
                 alignment: .bottom
             )
             .offset(x: shakeOffset)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal)
+
         .frame(height: 60)
         .onAppear {
             if let date = date {

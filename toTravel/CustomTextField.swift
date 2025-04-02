@@ -15,28 +15,26 @@ struct UnderlinedTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack(alignment: .leading) {
-                // Название поля
                 Text(title)
-                    .foregroundColor(isEditing ? Color(hex: "#6464CB") : .gray)
+                    .font(Theme.Fonts.countryTitle) // Размер 16 из Theme
+                    .foregroundColor(isEditing ? Theme.Colors.primary : Theme.Colors.secondary)
                     .offset(y: isEditing || !text.isEmpty ? -25 : 0)
                     .scaleEffect(isEditing || !text.isEmpty ? 0.8 : 1, anchor: .leading)
                     .animation(.easeInOut(duration: 0.2), value: isEditing || !text.isEmpty)
                 
-                // Поле ввода
                 TextField("", text: $text, onEditingChanged: { editing in
                     isEditing = editing
                 })
             }
-            .padding(.vertical, 12) // Увеличиваем отступы
+            .padding(.vertical, 12)
             .overlay(
                 Rectangle()
                     .frame(height: isEditing ? 2 : 1)
-                    .foregroundColor(isEditing ? Color(hex: "#6464CB") : Color(hex: "#b9b9b9")),
+                    .foregroundColor(isEditing ? Theme.Colors.primary : Theme.Colors.secondary.opacity(0.5)),
                 alignment: .bottom
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal)
-        .frame(height: 60) // Фиксированная высота поля
+        .frame(height: 60)
     }
 }

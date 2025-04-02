@@ -1,9 +1,3 @@
-//  CountriesManager.swift
-//  toTravel
-//
-//  Created by Ed on 3/26/25.
-//
-
 import Foundation
 import Network
 
@@ -11,13 +5,25 @@ class CountriesManager: ObservableObject {
     static let shared = CountriesManager()
     
     private let cacheKey = "cachedCountries"
-    @Published private var countryCodes: [String: String] = [:]
+    @Published private var countries: [Country] = []
     private let fileManager = FileManager.default
     private let cacheFileURL: URL
     @Published private var countryAccessData: [String: [CountryAccess]] = [:]
     
-    var countries: [String] {
-        Array(countryCodes.values).sorted()
+    var countryNames: [String] {
+        countries.filter { $0.isIndependent }.map { $0.name }.sorted()
+    }
+    
+    struct Country: Codable, Identifiable {
+        let id = UUID()
+        let name: String
+        let code: String
+        let flagURL: String
+        let isIndependent: Bool
+        
+        enum CodingKeys: String, CodingKey {
+            case name, code, flagURL, isIndependent
+        }
     }
     
     private init() {
@@ -27,10 +33,10 @@ class CountriesManager: ObservableObject {
         loadCachedCountries()
         loadCachedCountryAccessData()
         
-        if countryCodes.isEmpty {
+        if countries.isEmpty {
             fetchCountries()
         } else {
-            print("Загружено \(countryCodes.count) стран из кеша")
+            print("Загружено \(countries.count) стран из кеша")
         }
         
         setupBackgroundUpdates()
@@ -40,80 +46,110 @@ class CountriesManager: ObservableObject {
     
     func getCode(for country: String) -> String? {
         let trimmedCountry = country.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let code = countryCodes.first(where: { $0.value == trimmedCountry })?.key {
-            return code
+        if let country = countries.first(where: { $0.name == trimmedCountry }) {
+            return country.code
         } else {
-            print("Код не найден для страны: \(trimmedCountry). Доступные страны: \(countries)")
+            print("Код не найден для страны: \(trimmedCountry). Доступные страны: \(countryNames)")
             return nil
         }
     }
     
     func getName(forCode code: String) -> String {
         let upperCode = code.uppercased()
-        return countryCodes[upperCode] ?? code
+        return countries.first(where: { $0.code == upperCode })?.name ?? code
+    }
+    
+    // Метод для получения URL флага по названию страны (оставляем для совместимости)
+    func getFlagURL(for country: String) -> URL? {
+        if let country = countries.first(where: { $0.name == country }) {
+            return URL(string: country.flagURL)
+        }
+        return nil
+    }
+    
+    // Метод для получения URL флага по коду страны
+    func getFlagURL(forCode code: String) -> URL? {
+        let upperCode = code.uppercased()
+        if let country = countries.first(where: { $0.code == upperCode }) {
+            return URL(string: country.flagURL)
+        }
+        return nil
     }
     
     private func fetchCountries() {
-        guard let url = URL(string: "https://flagcdn.com/ru/codes.json") else {
-            print("Неверный URL для codes.json")
+        guard let url = URL(string: "https://restcountries.com/v3.1/all") else {
+            print("Неверный URL для restcountries")
             return
         }
         
-        let sovereignCountryCodes = Set([
-            "AF", "AL", "DZ", "AD", "AO", "AG", "AR", "AM", "AU", "AT", "AZ", "BS", "BH", "BD", "BB",
-            "BY", "BE", "BZ", "BJ", "BT", "BO", "BA", "BW", "BR", "BN", "BG", "BF", "BI", "KH", "CM",
-            "CA", "CV", "CF", "TD", "CL", "CN", "CO", "KM", "CG", "CD", "CR", "CI", "HR", "CU", "CY",
-            "CZ", "DK", "DJ", "DM", "DO", "EC", "EG", "SV", "GQ", "ER", "EE", "SZ", "ET", "FJ", "FI",
-            "FR", "GA", "GM", "GE", "DE", "GH", "GR", "GD", "GT", "GN", "GW", "GY", "HT", "HN", "HU",
-            "IS", "IN", "ID", "IR", "IQ", "IE", "IL", "IT", "JM", "JP", "JO", "KZ", "KE", "KI", "KP",
-            "KR", "KW", "KG", "LA", "LV", "LB", "LS", "LR", "LY", "LI", "LT", "LU", "MG", "MW", "MY",
-            "MV", "ML", "MT", "MH", "MR", "MU", "MX", "FM", "MD", "MC", "MN", "ME", "MA", "MZ", "MM",
-            "NA", "NR", "NP", "NL", "NZ", "NI", "NE", "NG", "NO", "OM", "PK", "PW", "PA", "PG", "PY",
-            "PE", "PH", "PL", "PT", "QA", "RO", "RU", "RW", "KN", "LC", "VC", "WS", "SM", "ST", "SA",
-            "SN", "RS", "SC", "SL", "SG", "SK", "SI", "SB", "SO", "ZA", "SS", "ES", "LK", "SD", "SR",
-            "SE", "CH", "SY", "TJ", "TH", "TL", "TG", "TO", "TT", "TN", "TR", "TM", "TV", "UG", "UA",
-            "AE", "GB", "US", "UY", "UZ", "VU", "VE", "VN", "YE", "ZM", "ZW", "TZ", "HK", "MO", "MK",
-            "TW", "PS", "XK"
-        ])
-        
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
-                print("Ошибка загрузки codes.json: \(error.localizedDescription)")
+                print("Ошибка загрузки restcountries: \(error.localizedDescription)")
                 return
             }
             
             guard let data = data else {
-                print("Нет данных от codes.json")
+                print("Нет данных от restcountries")
                 return
             }
             
             do {
-                let decoded = try JSONDecoder().decode([String: String].self, from: data)
-                let filtered = Dictionary(uniqueKeysWithValues: decoded.filter {
-                    !$0.key.contains("-") && sovereignCountryCodes.contains($0.key.uppercased())
-                }.map { ($0.key.uppercased(), $0.value) })
+                let decoder = JSONDecoder()
+                let allCountries = try decoder.decode([RestCountry].self, from: data)
+                
+                let locale = Locale.current.language.languageCode?.identifier ?? "ru"
+                let fetchedCountries = allCountries.map { restCountry in
+                    let name = locale == "ru" ? (restCountry.translations["rus"]?.common ?? restCountry.name.common) : restCountry.name.common
+                    return Country(
+                        name: name,
+                        code: restCountry.cca2.uppercased(),
+                        flagURL: restCountry.flags.png,
+                        isIndependent: restCountry.independent ?? false
+                    )
+                }
+                
                 DispatchQueue.main.async {
-                    self.countryCodes = filtered
+                    self.countries = fetchedCountries
                     self.saveCountriesToCache()
-                    print("Загружено и сохранено \(filtered.count) суверенных стран")
+                    print("Загружено и сохранено \(fetchedCountries.count) стран")
                 }
             } catch {
-                print("Ошибка декодирования codes.json: \(error.localizedDescription)")
+                print("Ошибка декодирования restcountries: \(error.localizedDescription)")
             }
         }.resume()
     }
     
+    private struct RestCountry: Decodable {
+        let name: Name
+        let cca2: String
+        let independent: Bool?
+        let translations: [String: Translation]
+        let flags: Flags
+        
+        struct Name: Decodable {
+            let common: String
+        }
+        
+        struct Translation: Decodable {
+            let common: String
+        }
+        
+        struct Flags: Decodable {
+            let png: String
+        }
+    }
+    
     private func saveCountriesToCache() {
         let encoder = JSONEncoder()
-        if let encoded = try? encoder.encode(countryCodes) {
+        if let encoded = try? encoder.encode(countries) {
             UserDefaults.standard.set(encoded, forKey: cacheKey)
         }
     }
     
     private func loadCachedCountries() {
         if let cachedData = UserDefaults.standard.data(forKey: cacheKey),
-           let decoded = try? JSONDecoder().decode([String: String].self, from: cachedData) {
-            countryCodes = decoded
+           let decoded = try? JSONDecoder().decode([Country].self, from: cachedData) {
+            countries = decoded
         }
     }
     

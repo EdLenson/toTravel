@@ -39,6 +39,23 @@ struct ToTravelApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    // Настройка UINavigationBar с учётом темы
+                    let appearance = UINavigationBarAppearance()
+                    appearance.configureWithOpaqueBackground()
+                    appearance.shadowColor = .clear
+                    appearance.shadowImage = UIImage()
+                    
+                    // Динамическая настройка цвета в зависимости от системной темы
+                    if UITraitCollection.current.userInterfaceStyle == .dark {
+                        appearance.backgroundColor = UIColor(Theme.Colors.Dark.surface) // Тёмная тема: 2D2F31
+                    } else {
+                        appearance.backgroundColor = UIColor(Theme.Colors.surface) // Светлая тема: white
+                    }
+                    
+                    UINavigationBar.appearance().standardAppearance = appearance
+                    UINavigationBar.appearance().scrollEdgeAppearance = appearance
+                }
         }
         .modelContainer(sharedModelContainer)
     }

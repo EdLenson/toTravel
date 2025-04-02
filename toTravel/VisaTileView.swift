@@ -3,121 +3,119 @@ import SwiftUI
 struct VisaTileView: View {
     let visa: Visa
     let dateFormatter: DateFormatter
-    
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var countriesManager = CountriesManager.shared
     @State private var flagImage: UIImage? = nil
+    @State private var flagLoadError: Bool = false
     
-    private var isExpiringSoon: Bool {
+    private var expiryText: String {
         let today = Calendar.current.startOfDay(for: Date())
         let end = Calendar.current.startOfDay(for: visa.endDate)
-        let components = Calendar.current.dateComponents([.month], from: today, to: end)
-        let monthsLeft = components.month ?? 0
-        return monthsLeft < 3 && end > today
-    }
-    
-    private func flagURL(for country: String) -> URL? {
-        if let code = countriesManager.getCode(for: country)?.lowercased() {
-            let urlString = "https://flagcdn.com/w320/\(code).png"
-            print("Формирую URL для \(country): \(urlString)")
-            return URL(string: urlString)
+        
+        if today == end {
+            return "Истекает сегодня"
+        } else if end < today {
+            return "Недействительна"
         } else {
-            print("Код не найден для страны \(country)")
-            return nil
+            return "до \(dateFormatter.string(from: visa.endDate))"
         }
     }
     
+    private var shouldHighlight: Bool {
+        let today = Calendar.current.startOfDay(for: Date())
+        let end = Calendar.current.startOfDay(for: visa.endDate)
+        let components = Calendar.current.dateComponents([.month], from: today, to: end)
+        
+        let monthsLeft = components.month ?? 0
+        return monthsLeft < 3 || end <= today
+    }
+    
     private func loadFlagImage() {
-        guard let code = countriesManager.getCode(for: visa.issuingCountry),
-              let url = flagURL(for: visa.issuingCountry) else {
-            print("Ошибка: код страны или URL недоступны для \(visa.issuingCountry)")
+        guard let url = countriesManager.getFlagURL(forCode: visa.issuingCountry) else {
+            flagLoadError = true
+            print("URL флага не найден для кода: \(visa.issuingCountry)")
             return
         }
         
         let fileManager = FileManager.default
         let cachesDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let fileURL = cachesDirectory.appendingPathComponent("\(code).png")
+        let fileURL = cachesDirectory.appendingPathComponent("\(visa.issuingCountry.lowercased()).png")
         
-        // Проверяем, есть ли флаг в кэше
         if fileManager.fileExists(atPath: fileURL.path) {
             if let image = UIImage(contentsOfFile: fileURL.path) {
                 DispatchQueue.main.async {
                     self.flagImage = image
-                    print("Флаг загружен с диска для \(visa.issuingCountry)")
                 }
                 return
-            } else {
-                print("Файл существует, но не удалось загрузить изображение: \(fileURL.path)")
             }
         }
         
-        // Если флага нет в кэше, загружаем из сети
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
-                print("Ошибка сети для \(url): \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.flagLoadError = true
+                }
+                print("Ошибка загрузки флага для \(visa.issuingCountry): \(error.localizedDescription)")
                 return
             }
-            
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                print("Неверный ответ сервера для \(url): \(String(describing: (response as? HTTPURLResponse)?.statusCode))")
-                return
-            }
-            
             guard let data = data, let image = UIImage(data: data) else {
-                print("Не удалось декодировать данные для \(url)")
+                DispatchQueue.main.async {
+                    self.flagLoadError = true
+                }
+                print("Данные флага для \(visa.issuingCountry) невалидны")
                 return
             }
-            
             DispatchQueue.main.async {
                 self.flagImage = image
-                print("Флаг загружен из сети для \(visa.issuingCountry)")
-                do {
-                    try data.write(to: fileURL)
-                    print("Флаг сохранён на диск: \(fileURL.path)")
-                } catch {
-                    print("Ошибка сохранения на диск: \(error.localizedDescription)")
-                }
+                try? data.write(to: fileURL)
             }
         }.resume()
     }
     
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            // Отображаем флаг или заглушку без индикации загрузки
-            if let image = flagImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40)
-            } else {
-                Color.gray
-                    .frame(width: 40, height: 30)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                if flagLoadError || flagImage == nil {
+                    Color.gray
+                        .frame(width: 24, height: 24)
+                        .cornerRadius(4)
+                } else if let image = flagImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .cornerRadius(4)
+                }
             }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(visa.customName.isEmpty ? "Без названия" : visa.customName)
-                    .font(.headline)
-                    .lineLimit(1)
-                
-                Text("до \(dateFormatter.string(from: visa.endDate))")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
+            .padding(8)
+            .background(Theme.Colors.background(for: colorScheme))
+            .cornerRadius(8)
             
             Spacer()
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(visa.customName.isEmpty ? "Без названия" : visa.customName)
+                    .font(Theme.Fonts.countryTitle)
+                    .foregroundColor(Theme.Colors.text(for: colorScheme))
+                    .lineLimit(1)
+                
+                Text(expiryText)
+                    .font(Theme.Fonts.countrySubtitle)
+                    .foregroundColor(shouldHighlight ? Theme.Colors.expiring(for: colorScheme) : Theme.Colors.secondary)
+                    .lineLimit(1)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 0)
-        .frame(width: 361, height: 80, alignment: .leading)
-        .background(.white)
-        .cornerRadius(8)
-        .shadow(color: Color(red: 0.11, green: 0.11, blue: 0.18).opacity(0.07), radius: 7.5, x: 0, y: 0)
+        .padding(12)
+        .frame(width: 160, height: 140, alignment: .leading)
+        .background(Theme.Colors.surface(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: Theme.Tiles.shadowColor, radius: Theme.Tiles.shadowRadius, x: Theme.Tiles.shadowX, y: Theme.Tiles.shadowY)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 16)
                 .inset(by: 0.5)
                 .stroke(
-                    isExpiringSoon ? Color(red: 1, green: 0.4, blue: 0.38) : Color(red: 0.94, green: 0.94, blue: 0.94),
-                    lineWidth: 1
+                    shouldHighlight ? Theme.Colors.expiring(for: colorScheme).opacity(0.25) : Color.clear,
+                    lineWidth: 2
                 )
         )
         .onAppear {
@@ -125,7 +123,28 @@ struct VisaTileView: View {
         }
         .onChange(of: visa.issuingCountry) { _ in
             flagImage = nil
+            flagLoadError = false
             loadFlagImage()
         }
     }
+}
+
+#Preview {
+    VisaTileView(
+        visa: Visa(
+            customName: "Test Visa",
+            passport: nil,
+            issuingCountry: "RU",
+            entriesCount: 1,
+            issueDate: Date(),
+            startDate: Date(),
+            endDate: Date().addingTimeInterval(60*60*24*90),
+            validityPeriod: 30
+        ),
+        dateFormatter: {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd.MM.yyyy"
+            return formatter
+        }()
+    )
 }

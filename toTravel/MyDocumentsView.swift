@@ -1,20 +1,28 @@
 import SwiftUI
 import SwiftData
 
-struct MyPassportsView: View {
+struct MyDocumentsView: View {
+    // MARK: - Properties
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Query private var passports: [Passport]
-    @Binding var selectedPassport: Passport?
+    @Query private var visas: [Visa]
+    @State private var isShowingAddSheet: Bool = false
     @State private var isShowingAddPassportView: Bool = false
+    @State private var isShowingAddVisaView: Bool = false
+    @Binding var selectedPassportForDetail: Passport?
+    @Binding var selectedVisaForDetail: Visa?
     
+    // MARK: - Date Formatter
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy"
         return formatter
     }()
     
-    // Сортированные паспорта
+    // MARK: - Computed Properties
+    
+    /// Сортирует паспорта по дате истечения срока, приоритет у просроченных или скоро истекающих
     private var sortedPassports: [Passport] {
         passports.sorted { passport1, passport2 in
             let today = Calendar.current.startOfDay(for: Date())
@@ -27,79 +35,200 @@ struct MyPassportsView: View {
             let isExpiringSoon1 = monthsLeft1 < 6 || expiry1 < today
             let isExpiringSoon2 = monthsLeft2 < 6 || expiry2 < today
             
-            // Паспорта с истекающим сроком (< 6 месяцев или просроченные) выше
             if isExpiringSoon1 != isExpiringSoon2 {
                 return isExpiringSoon1 && !isExpiringSoon2
             }
-            // Если оба истекают или оба нормальные, сортируем по дате истечения
             return expiry1 < expiry2
         }
     }
     
+    /// Фильтрует визы, оставляя только те, что привязаны к паспорту
+    private var validVisas: [Visa] {
+        visas.filter { $0.passport != nil }
+    }
+    
+    /// Сортирует визы по дате окончания, приоритет у просроченных или скоро истекающих
+    private var sortedVisas: [Visa] {
+        validVisas.sorted { visa1, visa2 in
+            let today = Calendar.current.startOfDay(for: Date())
+            let end1 = Calendar.current.startOfDay(for: visa1.endDate)
+            let end2 = Calendar.current.startOfDay(for: visa2.endDate)
+            
+            let monthsLeft1 = Calendar.current.dateComponents([.month], from: today, to: end1).month ?? 0
+            let monthsLeft2 = Calendar.current.dateComponents([.month], from: today, to: end2).month ?? 0
+            
+            let isExpiringSoon1 = monthsLeft1 < 3 || end1 <= today
+            let isExpiringSoon2 = monthsLeft2 < 3 || end2 <= today
+            
+            if isExpiringSoon1 != isExpiringSoon2 {
+                return isExpiringSoon1 && !isExpiringSoon2
+            }
+            return end1 < end2
+        }
+    }
+    
+    // MARK: - Body
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                ScrollView {
-                    VStack(spacing: Theme.Tiles.listSpacing) {
-                        Spacer(minLength: 70) // Отступ под плашку
-                        
-                        if passports.isEmpty {
-                            Text("Нет паспортов")
-                                .font(.headline)
-                                .foregroundColor(Theme.Colors.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 50)
-                        } else {
-                            ForEach(sortedPassports) { passport in
-                                Button(action: {
-                                    selectedPassport = passport
-                                }) {
-                                    PassportTileView(passport: passport, dateFormatter: dateFormatter)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                        
-                        Button(action: {
-                            isShowingAddPassportView = true
-                        }) {
-                            Text("Добавить паспорт")
-                                .font(Theme.Fonts.button)
-                                .foregroundColor(Theme.Colors.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Theme.Colors.surface(for: colorScheme))
-                                .clipShape(RoundedRectangle(cornerRadius: Theme.Tiles.cornerRadius))
-                        }
-                        .padding(.top, passports.isEmpty ? 0 : Theme.Tiles.spacing)
-                    }
-                    .padding(.horizontal, Theme.Tiles.listEdgePadding)
-                    .padding(.bottom, Theme.Tiles.verticalPadding)
-                }
-                .background(Theme.Colors.background(for: colorScheme))
+        ScrollView {
+            VStack(spacing: 0) {
+                // MARK: - Passports Section
+                passportsSection
                 
-                VStack {
-                    Text("Мои паспорта")
-                        .font(Theme.Fonts.header)
-                        .foregroundColor(Theme.Colors.text(for: colorScheme))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 16)
-                        .padding(.top, 24)
-                        .padding(.bottom, 16)
+                // MARK: - Visas Section
+                visasSection
+                
+                // MARK: - Add Button
+                Button(action: {
+                    isShowingAddSheet = true
+                }) {
+                    Text("Добавить")
+                        .font(Theme.Fonts.button)
+                        .foregroundColor(Theme.Colors.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Theme.Colors.surface(for: colorScheme))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Tiles.cornerRadius))
                 }
-                .background(Theme.Colors.background(for: colorScheme))
-                .frame(maxWidth: .infinity)
+                .padding(.top, 32)
+                .padding(.horizontal, Theme.Tiles.spacing)
             }
-            .safeAreaInset(edge: .top, content: {
-                Color.clear.frame(height: 0)
-            })
-            .sheet(isPresented: $isShowingAddPassportView) {
-                AddPassportView(isShowingAddPassportView: $isShowingAddPassportView)
+            .background(Theme.Colors.background(for: colorScheme))
+        }
+        .background(Theme.Colors.background(for: colorScheme))
+        .actionSheet(isPresented: $isShowingAddSheet) {
+            ActionSheet(
+                title: Text("Добавить документ"),
+                buttons: [
+                    .default(Text("Паспорт")) {
+                        isShowingAddPassportView = true
+                    },
+                    .default(Text("Виза")) {
+                        isShowingAddVisaView = true
+                    },
+                    .cancel()
+                ]
+            )
+        }
+        .sheet(isPresented: $isShowingAddPassportView) {
+            AddPassportView(isShowingAddPassportView: $isShowingAddPassportView)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $isShowingAddVisaView) {
+            AddVisaView(isShowingAddVisaView: $isShowingAddVisaView)
+                .presentationDetents([.large])
+        }
+    }
+    
+    // MARK: - UI Components
+    
+    /// Секция отображения списка паспортов
+    private var passportsSection: some View {
+        Group {
+            HStack {
+                Text("Мои паспорта")
+                    .font(Theme.Fonts.header)
+                    .foregroundColor(Theme.Colors.text(for: colorScheme))
+                Spacer()
             }
+            .padding(.horizontal, Theme.Tiles.spacing)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+            .background(Theme.Colors.background(for: colorScheme))
+            .frame(maxWidth: .infinity)
+            
+            if passports.isEmpty {
+                Text("Добавьте паспорт")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Theme.Colors.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.Tiles.spacing)
+                    .padding(.bottom, 16)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Theme.Tiles.listSpacing) {
+                        ForEach(sortedPassports) { passport in
+                            Button(action: {
+                                togglePassportSelection(passport)
+                            }) {
+                                PassportTileView(passport: passport, dateFormatter: dateFormatter)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, Theme.Tiles.spacing)
+                    .padding(.bottom, 16)
+                }
+            }
+        }
+    }
+    
+    /// Секция отображения списка виз
+    private var visasSection: some View {
+        Group {
+            HStack {
+                Text("Мои визы")
+                    .font(Theme.Fonts.header)
+                    .foregroundColor(Theme.Colors.text(for: colorScheme))
+                Spacer()
+            }
+            .padding(.horizontal, Theme.Tiles.spacing)
+            .padding(.top, 32)
+            .padding(.bottom, 16)
+            .background(Theme.Colors.background(for: colorScheme))
+            .frame(maxWidth: .infinity)
+            
+            if validVisas.isEmpty {
+                Text("Добавьте визу в паспорт")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(Theme.Colors.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.Tiles.spacing)
+                    .padding(.bottom, 16)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Theme.Tiles.listSpacing) {
+                        ForEach(sortedVisas) { visa in
+                            Button(action: {
+                                toggleVisaSelection(visa)
+                            }) {
+                                VisaTileView(visa: visa, dateFormatter: dateFormatter)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, Theme.Tiles.spacing)
+                    .padding(.bottom, 16)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    /// Переключает выбор паспорта для детального просмотра
+    private func togglePassportSelection(_ passport: Passport) {
+        if selectedPassportForDetail == passport {
+            selectedPassportForDetail = nil
+        }
+        DispatchQueue.main.async {
+            selectedPassportForDetail = passport
+        }
+    }
+    
+    /// Переключает выбор визы для детального просмотра
+    private func toggleVisaSelection(_ visa: Visa) {
+        if selectedVisaForDetail == visa {
+            selectedVisaForDetail = nil
+        }
+        DispatchQueue.main.async {
+            selectedVisaForDetail = visa
         }
     }
 }
 
 #Preview {
-    MyPassportsView(selectedPassport: .constant(nil))
+    MyDocumentsView(
+        selectedPassportForDetail: .constant(nil),
+        selectedVisaForDetail: .constant(nil)
+    )
 }

@@ -1,19 +1,12 @@
-//
-//  VisaDetailView.swift
-//  toTravel
-//
-//  Created by Ed on 3/21/25.
-//
-
 import SwiftUI
 import SwiftData
 
 struct VisaDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     let visa: Visa
     @Binding var isPresented: Bool
-    @Binding var isExpanded: Bool
-    let currentHeight: CGFloat
+    @ObservedObject private var countriesManager = CountriesManager.shared
     
     @State private var isShowingEditView: Bool = false
     
@@ -26,8 +19,14 @@ struct VisaDetailView: View {
     private var expirationWarning: String? {
         let today = Calendar.current.startOfDay(for: Date())
         let endDate = Calendar.current.startOfDay(for: visa.endDate)
-        if let days = Calendar.current.dateComponents([.day], from: today, to: endDate).day, days < 90 && days > 0 {
-            return "Истекает через \(days) дн."
+        if let days = Calendar.current.dateComponents([.day], from: today, to: endDate).day {
+            if days < 0 {
+                return "Недействительна"
+            } else if days == 0 {
+                return "Истекает сегодня"
+            } else if days < 90 {
+                return "Истекает через \(days) дн."
+            }
         }
         return nil
     }
@@ -42,55 +41,60 @@ struct VisaDetailView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Название документа
-            Text(visa.customName.isEmpty ? "Нет названия" : visa.customName)
-                .font(.title2)
-                .bold()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 16)
-                .padding(.leading, 16)
-                .padding(.bottom, 32)
-            
-            // Кнопки
-            HStack(spacing: 16) {
-                ActionButton(icon: "square.and.arrow.up", title: "Поделиться") {
-                    shareVisa()
+            VStack(spacing: 0) {
+                Text(visa.customName.isEmpty ? "Нет названия" : visa.customName)
+                    .font(.title2)
+                    .bold()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                
+                HStack(spacing: 16) {
+                    ActionButton(icon: "share", title: "Поделиться") {
+                        shareVisa()
+                    }
+                    .frame(width: 80, alignment: .center)
+                    
+                    ActionButton(icon: "edit", title: "Изменить") {
+                        isShowingEditView = true
+                    }
+                    .frame(width: 80, alignment: .center)
+                    
+                    ActionButton(icon: "delete", title: "Удалить") {
+                        deleteVisa()
+                    }
+                    .frame(width: 80, alignment: .center)
                 }
-                ActionButton(icon: "pencil", title: "Редактировать") {
-                    isShowingEditView = true
-                }
-                ActionButton(icon: "trash", title: "Удалить", color: .red) {
-                    deleteVisa()
-                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .background(Theme.Colors.background(for: colorScheme))
             
-            // Информация
             VStack(alignment: .leading, spacing: 16) {
                 InfoField(label: "Паспорт", value: passportName)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                InfoField(label: "Страна выдачи", value: visa.issuingCountry.isEmpty ? "Не указана" : visa.issuingCountry)
+                InfoField(label: "Страна выдачи", value: countriesManager.getName(forCode: visa.issuingCountry))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 InfoField(label: "Количество въездов", value: visa.entriesCount < 0 ? "Неограниченно" : String(visa.entriesCount))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 InfoField(label: "Срок действия", value: dateFormatter.string(from: visa.endDate))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let warning = expirationWarning {
-                    InfoField(label: "Предупреждение", value: warning, valueColor: .red)
+                    InfoField(label: "Предупреждение", value: warning, valueColor: Theme.Colors.expiring)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 InfoField(label: "Продолжительность пребывания", value: validityPeriodText)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.top, 16)
+            .background(Theme.Colors.surface(for: colorScheme))
             
             Spacer()
         }
-        .background(Color(.systemBackground))
         .sheet(isPresented: $isShowingEditView) {
             EditVisaView(isShowingEditVisaView: $isShowingEditView, visa: visa)
+            .presentationDetents([.large])
         }
     }
     
@@ -98,7 +102,7 @@ struct VisaDetailView: View {
         let text = """
         Виза: \(visa.customName)
         Паспорт: \(passportName)
-        Страна выдачи: \(visa.issuingCountry)
+        Страна выдачи: \(countriesManager.getName(forCode: visa.issuingCountry))
         Количество въездов: \(visa.entriesCount < 0 ? "Неограниченно" : String(visa.entriesCount))
         Срок действия: \(dateFormatter.string(from: visa.endDate))
         Продолжительность пребывания: \(validityPeriodText)
