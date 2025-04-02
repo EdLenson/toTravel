@@ -12,7 +12,7 @@ struct MyCountriesView: View {
     @State private var isPassportFieldActive: Bool = false
     @State private var isShowingPassportList: Bool = false
     @State private var isShowingSearch: Bool = false
-    @State private var isLoading: Bool = false // Состояние загрузки
+    @State private var isLoading: Bool = false
     @ObservedObject private var countriesManager = CountriesManager.shared
     @State private var tabsScrollProxy: ScrollViewProxy?
     @State private var listScrollProxy: ScrollViewProxy?
@@ -26,6 +26,7 @@ struct MyCountriesView: View {
         case visaOnArrival = "Виза по прибытии"
         case eVisa = "Электронная виза"
         case visaRequired = "Требуется виза"
+        case noAdmission = "Въезд запрещён" // Новая категория
     }
     
     // MARK: - Body
@@ -58,6 +59,7 @@ struct MyCountriesView: View {
         case .visaOnArrival: return visaOnArrivalCountries()
         case .eVisa: return eVisaCountries()
         case .visaRequired: return visaRequiredCountries()
+        case .noAdmission: return noAdmissionCountries() // Добавляем новую категорию
         }
     }
     
@@ -82,7 +84,8 @@ struct MyCountriesView: View {
         guard let passport = selectedPassport else { return [] }
         let issuingCountry = passport.issuingCountry.uppercased()
         return countryAccessData[issuingCountry]?.filter {
-            $0.requirement.trimmingCharacters(in: .whitespacesAndNewlines) == "e-visa"
+            let req = $0.requirement.trimmingCharacters(in: .whitespacesAndNewlines)
+            return req == "e-visa" || req == "eta"
         }.sorted { countriesManager.getName(forCode: $0.destination) < countriesManager.getName(forCode: $1.destination) } ?? []
     }
     
@@ -91,6 +94,14 @@ struct MyCountriesView: View {
         let issuingCountry = passport.issuingCountry.uppercased()
         return countryAccessData[issuingCountry]?.filter {
             $0.requirement.trimmingCharacters(in: .whitespacesAndNewlines) == "visa required"
+        }.sorted { countriesManager.getName(forCode: $0.destination) < countriesManager.getName(forCode: $1.destination) } ?? []
+    }
+    
+    private func noAdmissionCountries() -> [CountryAccess] {
+        guard let passport = selectedPassport else { return [] }
+        let issuingCountry = passport.issuingCountry.uppercased()
+        return countryAccessData[issuingCountry]?.filter {
+            $0.requirement.trimmingCharacters(in: .whitespacesAndNewlines) == "no admission"
         }.sorted { countriesManager.getName(forCode: $0.destination) < countriesManager.getName(forCode: $1.destination) } ?? []
     }
     
@@ -175,7 +186,7 @@ struct MyCountriesView: View {
         ForEach(VisaCategory.allCases, id: \.self) { category in
             Section(header: categoryHeader(for: category)) {
                 if isLoading {
-                    ForEach(0..<5) { _ in // Плейсхолдер для 5 элементов
+                    ForEach(0..<5) { _ in
                         placeholderCountryRow
                     }
                 } else {
