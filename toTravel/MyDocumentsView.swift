@@ -81,14 +81,15 @@ struct MyDocumentsView: View {
                 Button(action: {
                     isShowingAddSheet = true
                 }) {
-                    Text("Добавить")
+                    Text(NSLocalizedString("Добавить", comment: ""))
                         .font(Theme.Fonts.button)
-                        .foregroundColor(Theme.Colors.primary)
+                        .foregroundColor(Theme.Colors.textInverse)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Theme.Colors.surface(for: colorScheme))
+                        .background(Theme.Colors.primary(for: colorScheme))
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Tiles.cornerRadius))
                 }
+                .buttonStyle(PlainButtonStyle())
                 .padding(.top, 32)
                 .padding(.horizontal, Theme.Tiles.spacing)
             }
@@ -97,12 +98,12 @@ struct MyDocumentsView: View {
         .background(Theme.Colors.background(for: colorScheme))
         .actionSheet(isPresented: $isShowingAddSheet) {
             ActionSheet(
-                title: Text("Добавить документ"),
+                title: Text(NSLocalizedString("Добавить документ", comment: "")),
                 buttons: [
-                    .default(Text("Паспорт")) {
+                    .default(Text(NSLocalizedString("Паспорт", comment: ""))) {
                         isShowingAddPassportView = true
                     },
-                    .default(Text("Виза")) {
+                    .default(Text(NSLocalizedString("Виза", comment: ""))) {
                         isShowingAddVisaView = true
                     },
                     .cancel()
@@ -125,7 +126,7 @@ struct MyDocumentsView: View {
     private var passportsSection: some View {
         Group {
             HStack {
-                Text("Мои паспорта")
+                Text(NSLocalizedString("Мои паспорта", comment: ""))
                     .font(Theme.Fonts.header)
                     .foregroundColor(Theme.Colors.text(for: colorScheme))
                 Spacer()
@@ -137,7 +138,7 @@ struct MyDocumentsView: View {
             .frame(maxWidth: .infinity)
             
             if passports.isEmpty {
-                Text("Добавьте паспорт")
+                Text(NSLocalizedString("Добавьте паспорт", comment: ""))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Theme.Colors.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,7 +167,7 @@ struct MyDocumentsView: View {
     private var visasSection: some View {
         Group {
             HStack {
-                Text("Мои визы")
+                Text(NSLocalizedString("Мои визы", comment: ""))
                     .font(Theme.Fonts.header)
                     .foregroundColor(Theme.Colors.text(for: colorScheme))
                 Spacer()
@@ -178,7 +179,7 @@ struct MyDocumentsView: View {
             .frame(maxWidth: .infinity)
             
             if validVisas.isEmpty {
-                Text("Добавьте визу в паспорт")
+                Text(NSLocalizedString("Добавьте визу в паспорт", comment: ""))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Theme.Colors.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
