@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct UnderlinedTextField: View {
+    @Environment(\.colorScheme) private var colorScheme
     var title: String
     @Binding var text: String
     @State private var isEditing: Bool = false
@@ -17,7 +18,7 @@ struct UnderlinedTextField: View {
             ZStack(alignment: .leading) {
                 Text(title)
                     .font(Theme.Fonts.countryTitle) // Размер 16 из Theme
-                    .foregroundColor(isEditing ? Theme.Colors.primary : Theme.Colors.secondary)
+                    .foregroundColor(isEditing ? Theme.Colors.primary(for: colorScheme) : Theme.Colors.secondary(for: colorScheme))
                     .offset(y: isEditing || !text.isEmpty ? -25 : 0)
                     .scaleEffect(isEditing || !text.isEmpty ? 0.8 : 1, anchor: .leading)
                     .animation(.easeInOut(duration: 0.2), value: isEditing || !text.isEmpty)
@@ -30,7 +31,7 @@ struct UnderlinedTextField: View {
             .overlay(
                 Rectangle()
                     .frame(height: isEditing ? 2 : 1)
-                    .foregroundColor(isEditing ? Theme.Colors.primary : Theme.Colors.secondary.opacity(0.5)),
+                    .foregroundColor(isEditing ? Theme.Colors.primary(for: colorScheme) : Theme.Colors.secondary(for: colorScheme).opacity(0.5)),
                 alignment: .bottom
             )
         }

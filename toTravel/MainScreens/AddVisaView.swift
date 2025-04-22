@@ -1,15 +1,17 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - AddVisaView
 struct AddVisaView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Passport> { $0.type != "Внутренний" }) private var passports: [Passport]
+    @Environment(\.colorScheme) private var colorScheme
+    @Query private var passports: [Passport]
     @Binding var isShowingAddVisaView: Bool
     @ObservedObject private var countriesManager = CountriesManager.shared
     
     @State private var customName = ""
     @State private var selectedPassport: Passport?
-    @State private var issuingCountry: String? // Хранит код страны (cca2)
+    @State private var issuingCountry: String?
     @State private var entriesCount = ""
     @State private var isUnlimitedEntries = false
     @State private var startDate: Date?
@@ -22,10 +24,15 @@ struct AddVisaView: View {
     @State private var isShowingPassportList = false
     @State private var currentFieldIndex = -1
     @FocusState private var focusedField: String?
+    @State private var showPassportExpiryError = false
     
     private var minimumDate: Date { Calendar.current.startOfDay(for: Date()) }
     private var lastEditableFieldIndex: Int { isUnlimitedStay ? 5 : 6 }
     
+    @State private var startDateFieldView: UnderlinedDateField?
+    @State private var endDateFieldView: UnderlinedDateField?
+    
+    // MARK: - Body
     var body: some View {
         NavigationView {
             ScrollViewReader { scrollProxy in
@@ -33,15 +40,20 @@ struct AddVisaView: View {
                     formContent
                         .padding(.horizontal, 16)
                 }
-                .navigationTitle("Добавить визу")
-                .navigationBarItems(trailing: closeButton)
+                .navigationTitle(NSLocalizedString("Добавить визу", comment: "Add visa view title"))
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarItems(leading: closeButton)
                 .safeAreaInset(edge: .bottom) { bottomButton }
                 .onTapGesture { dismissKeyboard(); currentFieldIndex = -1; focusedField = nil }
-                .onChange(of: focusedField) { handleFocusChange($0, scrollProxy: scrollProxy) }
+                .onChange(of: focusedField) { _, newValue in // Обновлено для iOS 17+
+                    handleFocusChange(newValue, scrollProxy: scrollProxy)
+                }
             }
+            .background(Theme.Colors.background(for: colorScheme))
         }
     }
     
+    // MARK: - Form Content
     private var formContent: some View {
         VStack(spacing: 20) {
             visaNameField
@@ -57,17 +69,24 @@ struct AddVisaView: View {
         .padding(.vertical, 16)
     }
     
+    // MARK: - Visa Fields
     private var visaNameField: some View {
-        UnderlinedTextField(title: "Название визы", text: $customName)
-            .focused($focusedField, equals: "customName")
-            .submitLabel(.next)
-            .onTapGesture { setFieldActive(0) }
-            .onSubmit { moveToNextField() }
+        UnderlinedTextField(
+            title: NSLocalizedString("Название визы", comment: "Visa name field title"),
+            text: Binding(
+                get: { customName },
+                set: { customName = String($0.prefix(30)) }
+            )
+        )
+        .focused($focusedField, equals: "customName")
+        .submitLabel(.next)
+        .onTapGesture { setFieldActive(0) }
+        .onSubmit { moveToNextField() }
     }
     
     private var passportField: some View {
         UnderlinedSelectionField(
-            title: "Паспорт",
+            title: NSLocalizedString("Паспорт", comment: "Passport field title"),
             selectedValue: Binding(get: { selectedPassport?.customName }, set: { _ in }),
             isActive: currentFieldIndex == 1,
             action: { setFieldActive(1); isShowingPassportList = true },
@@ -75,7 +94,7 @@ struct AddVisaView: View {
         )
         .actionSheet(isPresented: $isShowingPassportList) {
             ActionSheet(
-                title: Text("Выберите паспорт"),
+                title: Text(NSLocalizedString("Выберите паспорт", comment: "Action sheet title for passport selection")),
                 buttons: passports.map { passport in
                     .default(Text(passport.customName)) {
                         selectedPassport = passport
@@ -88,7 +107,7 @@ struct AddVisaView: View {
     
     private var issuingCountryField: some View {
         UnderlinedSelectionField(
-            title: "Страна выдачи",
+            title: NSLocalizedString("Страна выдачи", comment: "Issuing country field label"),
             selectedValue: Binding(
                 get: { issuingCountry != nil ? countriesManager.getName(forCode: issuingCountry!) : nil },
                 set: { _ in }
@@ -108,78 +127,150 @@ struct AddVisaView: View {
     private var entriesSection: some View {
         Group {
             if !isUnlimitedEntries {
-                UnderlinedTextField(title: "Количество въездов", text: $entriesCount)
-                    .focused($focusedField, equals: "entriesCount")
-                    .keyboardType(.numberPad)
-                    .submitLabel(.next)
-                    .onTapGesture { setFieldActive(3) }
-                    .onSubmit { moveToNextField() }
+                UnderlinedTextField(
+                    title: NSLocalizedString("Количество въездов", comment: "Number of entries field label"),
+                    text: Binding(
+                        get: { entriesCount },
+                        set: {
+                            let filtered = $0.filter { $0.isNumber }
+                            entriesCount = String(filtered.prefix(3))
+                        }
+                    )
+                )
+                .focused($focusedField, equals: "entriesCount")
+                .keyboardType(.numberPad)
+                .submitLabel(.next)
+                .onTapGesture { setFieldActive(3) }
+                .onSubmit { moveToNextField() }
             }
-            CustomCheckbox(isChecked: $isUnlimitedEntries, title: "Неограниченное количество")
-                .onChange(of: isUnlimitedEntries) { handleEntriesToggle($0) }
+            CustomCheckbox(
+                isChecked: $isUnlimitedEntries,
+                title: NSLocalizedString("Неограниченное количество", comment: "Unlimited entries toggle")
+            )
+            .onChange(of: isUnlimitedEntries) { _, newValue in // Обновлено для iOS 17+
+                handleEntriesToggle(newValue)
+            }
         }
     }
     
     private var startDateField: some View {
         UnderlinedDateField(
-            title: "Дата начала действия",
+            title: NSLocalizedString("Дата начала действия", comment: "Start date field label"),
             date: $startDate,
-            dateString: $startDateString
+            dateString: $startDateString,
+            oppositeDate: endDate,
+            isStartDate: true
         )
         .focused($focusedField, equals: "startDate")
         .submitLabel(.next)
         .onTapGesture { setFieldActive(4) }
         .onSubmit { moveToNextField() }
+        .background(GeometryReader { _ in
+            Color.clear.onAppear {
+                startDateFieldView = UnderlinedDateField(
+                    title: NSLocalizedString("Дата начала действия", comment: "Start date field label"),
+                    date: $startDate,
+                    dateString: $startDateString,
+                    oppositeDate: endDate,
+                    isStartDate: true
+                )
+            }
+        })
     }
     
     private var endDateField: some View {
         UnderlinedDateField(
-            title: "Дата окончания действия",
+            title: NSLocalizedString("Дата окончания действия", comment: "End date field title"),
             date: $endDate,
             dateString: $endDateString,
-            minimumDate: startDate
+            minimumDate: startDate,
+            oppositeDate: startDate,
+            isStartDate: false
         )
         .focused($focusedField, equals: "endDate")
         .submitLabel(.next)
         .onTapGesture { setFieldActive(5) }
         .onSubmit { moveToNextField() }
+        .background(GeometryReader { _ in
+            Color.clear.onAppear {
+                endDateFieldView = UnderlinedDateField(
+                    title: NSLocalizedString("Дата окончания действия", comment: "End date field title"),
+                    date: $endDate,
+                    dateString: $endDateString,
+                    minimumDate: startDate,
+                    oppositeDate: startDate,
+                    isStartDate: false
+                )
+            }
+        })
     }
     
     private var stayDurationSection: some View {
         Group {
             if !isUnlimitedStay {
-                UnderlinedTextField(title: "Продолжительность пребывания", text: $stayDuration)
-                    .focused($focusedField, equals: "stayDuration")
-                    .keyboardType(.numberPad)
-                    .submitLabel(.done)
-                    .onTapGesture { setFieldActive(6) }
-                    .onSubmit { moveToNextField() }
+                UnderlinedTextField(
+                    title: NSLocalizedString("Продолжительность пребывания", comment: "Validity period field label"),
+                    text: Binding(
+                        get: { stayDuration },
+                        set: {
+                            let filtered = $0.filter { $0.isNumber }
+                            if let value = Int(filtered), value <= 366 {
+                                stayDuration = String(value)
+                            } else if filtered.isEmpty {
+                                stayDuration = ""
+                            } else {
+                                stayDuration = "366"
+                            }
+                        }
+                    )
+                )
+                .focused($focusedField, equals: "stayDuration")
+                .keyboardType(.numberPad)
+                .submitLabel(.done)
+                .onTapGesture { setFieldActive(6) }
+                .onSubmit { moveToNextField() }
             }
-            CustomCheckbox(isChecked: $isUnlimitedStay, title: "Неограниченно")
-                .onChange(of: isUnlimitedStay) { handleStayToggle($0) }
+            CustomCheckbox(
+                isChecked: $isUnlimitedStay,
+                title: NSLocalizedString("Неограниченно", comment: "Unlimited validity period or entries")
+            )
+            .onChange(of: isUnlimitedStay) { _, newValue in // Обновлено для iOS 17+
+                handleStayToggle(newValue)
+            }
         }
     }
     
+    // MARK: - Buttons
     private var saveButton: some View {
-        Group {
-            if allFieldsFilled && currentFieldIndex > lastEditableFieldIndex {
+        VStack {
+            if showPassportExpiryError {
+                Text(NSLocalizedString("Срок действия визы не может быть дольше срока действия паспорта", comment: "Passport expiry error"))
+                    .foregroundColor(Theme.Colors.expiring(for: colorScheme))
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if allFieldsFilledExceptDates && currentFieldIndex > lastEditableFieldIndex {
                 Button(action: saveVisa) {
-                    Text("Сохранить")
+                    Text(NSLocalizedString("Сохранить", comment: "Save button title"))
                         .font(.headline)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Theme.Colors.primary)
+                        .background(Theme.Colors.primary(for: colorScheme))
                         .foregroundColor(Theme.Colors.textInverse)
                         .cornerRadius(Theme.Tiles.cornerRadius)
                 }
-                .padding(.top, 20)
+                .padding(.top, 16)
                 .id("saveButton")
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }
     
     private var closeButton: some View {
-        Button("Закрыть") { isShowingAddVisaView = false }
+        Button(NSLocalizedString("Закрыть", comment: "Close button title")) {
+            isShowingAddVisaView = false
+        }
+        .foregroundColor(Theme.Colors.secondary(for: colorScheme))
     }
     
     private var bottomButton: some View {
@@ -188,28 +279,33 @@ struct AddVisaView: View {
                 HStack {
                     Spacer()
                     Button(action: moveToNextField) {
-                        Text(currentFieldIndex == lastEditableFieldIndex ? "Готово" : "Далее")
-                            .font(.headline)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(Theme.Colors.primary)
-                            .foregroundColor(Theme.Colors.textInverse)
-                            .cornerRadius(Theme.Tiles.cornerRadius)
+                        Text(currentFieldIndex == lastEditableFieldIndex ?
+                            NSLocalizedString("Готово", comment: "Done button title") :
+                            NSLocalizedString("Далее", comment: "Next button title")
+                        )
+                        .font(.headline)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Theme.Colors.primary(for: colorScheme))
+                        .foregroundColor(Theme.Colors.textInverse)
+                        .cornerRadius(Theme.Tiles.cornerRadius)
                     }
                     .padding(.trailing, 16)
                 }
                 .padding(.bottom, 16)
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }
     
-    private var allFieldsFilled: Bool {
+    // MARK: - Computed Properties
+    private var allFieldsFilledExceptDates: Bool {
         !customName.isEmpty &&
         selectedPassport != nil &&
         issuingCountry != nil &&
         (isUnlimitedEntries || !entriesCount.isEmpty) &&
-        startDate != nil && startDateString.count == 10 &&
-        endDate != nil && endDateString.count == 10 &&
+        startDateString.count == 10 &&
+        endDateString.count == 10 &&
         (isUnlimitedStay || (!stayDuration.isEmpty && Int(stayDuration) != nil))
     }
     
@@ -217,6 +313,7 @@ struct AddVisaView: View {
         currentFieldIndex == 1 || currentFieldIndex == 2
     }
     
+    // MARK: - Helper Functions
     private func fieldIndex(for field: String) -> Int {
         switch field {
         case "customName": return 0
@@ -259,10 +356,26 @@ struct AddVisaView: View {
     
     private func saveVisa() {
         Task {
+            if startDate == nil && startDateString.count == 10 {
+                startDateFieldView?.triggerShake()
+                return
+            }
+            if endDate == nil && endDateString.count == 10 {
+                endDateFieldView?.triggerShake()
+                return
+            }
+            
+            if let end = endDate, let passport = selectedPassport, end > passport.expiryDate {
+                showPassportExpiryError = true
+                endDateFieldView?.triggerShake()
+                return
+            }
+            showPassportExpiryError = false
+            
             let newVisa = Visa(
                 customName: customName,
                 passport: selectedPassport,
-                issuingCountry: issuingCountry ?? "Unknown", // Сохраняем код страны
+                issuingCountry: issuingCountry ?? "Unknown",
                 entriesCount: isUnlimitedEntries ? -1 : Int(entriesCount) ?? 1,
                 issueDate: Date(),
                 startDate: startDate ?? Date(),
@@ -271,9 +384,12 @@ struct AddVisaView: View {
             )
             modelContext.insert(newVisa)
             do {
-                try await modelContext.save()
+                try modelContext.save() // Убрано await
+                NotificationManager.shared.scheduleVisaNotifications(for: newVisa)
                 isShowingAddVisaView = false
-            } catch {}
+            } catch {
+                // Обработка ошибки, если нужно
+            }
         }
     }
     
@@ -285,7 +401,7 @@ struct AddVisaView: View {
         if let newValue, currentFieldIndex != fieldIndex(for: newValue) {
             setFieldActive(fieldIndex(for: newValue))
         }
-        if newValue == nil && allFieldsFilled {
+        if newValue == nil && allFieldsFilledExceptDates {
             withAnimation { scrollProxy.scrollTo("saveButton", anchor: .center) }
         }
     }

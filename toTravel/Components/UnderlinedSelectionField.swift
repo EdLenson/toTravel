@@ -1,11 +1,6 @@
-// UnderlinedSelectionField.swift
-// toTravel
-//
-// Created by Ed on 3/22/25.
-//
-
 import SwiftUI
 
+// MARK: - UnderlinedSelectionField
 struct UnderlinedSelectionField: View {
     var title: String
     @Binding var selectedValue: String?
@@ -15,12 +10,13 @@ struct UnderlinedSelectionField: View {
     
     @Environment(\.colorScheme) var colorScheme
     
+    // MARK: - Body
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack(alignment: .leading) {
                 Text(title)
-                    .font(Theme.Fonts.countryTitle) // Размер 16 из Theme
-                    .foregroundColor(isActive ? Theme.Colors.primary : Theme.Colors.secondary)
+                    .font(Theme.Fonts.countryTitle)
+                    .foregroundColor(isActive ? Theme.Colors.primary(for: colorScheme) : Theme.Colors.secondary(for: colorScheme))
                     .offset(y: isActive || selectedValue != nil ? -25 : 0)
                     .scaleEffect(isActive || selectedValue != nil ? 0.8 : 1, anchor: .leading)
                     .animation(.easeInOut(duration: 0.2), value: isActive || selectedValue != nil)
@@ -41,20 +37,17 @@ struct UnderlinedSelectionField: View {
             .overlay(
                 Rectangle()
                     .frame(height: isActive ? 2 : 1)
-                    .foregroundColor(isActive ? Theme.Colors.primary : Theme.Colors.secondary.opacity(0.5)),
+                    .foregroundColor(isActive ? Theme.Colors.primary(for: colorScheme) : Theme.Colors.secondary(for: colorScheme).opacity(0.5)),
                 alignment: .bottom
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        //.padding(.horizontal, Theme.Tiles.verticalPadding) // Отступ от краев 8
         .frame(height: 60)
         .contentShape(Rectangle())
         .onTapGesture {
             action()
         }
-        //.background(Theme.Colors.background(for: colorScheme)) // Прозрачный фон заменен на background из Theme
-        .onChange(of: selectedValue) { newValue in
-            print("UnderlinedSelectionField: selectedValue changed to \(newValue ?? "nil")")
+        .onChange(of: selectedValue) { _, newValue in // Обновлено для iOS 17+
             if newValue != nil {
                 onSelection()
             }

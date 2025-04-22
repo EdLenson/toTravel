@@ -1,18 +1,13 @@
-//
-//  FocusUtils.swift
-//  toTravel
-//
-//  Created by Ed on 3/23/25.
-//
-
 import SwiftUI
 
+// MARK: - View Extension
 extension View {
     func focusedField(isActive: Bool) -> some View {
         self.modifier(FocusedFieldModifier(isActive: isActive))
     }
 }
 
+// MARK: - FocusedFieldModifier
 struct FocusedFieldModifier: ViewModifier {
     let isActive: Bool
     @FocusState private var isFocused: Bool
@@ -20,7 +15,7 @@ struct FocusedFieldModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .focused($isFocused)
-            .onChange(of: isActive) { newValue in
+            .onChange(of: isActive) { _, newValue in // Обновлено для iOS 17+
                 isFocused = newValue
             }
     }

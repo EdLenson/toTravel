@@ -112,11 +112,21 @@ struct MyDocumentsView: View {
         }
         .sheet(isPresented: $isShowingAddPassportView) {
             AddPassportView(isShowingAddPassportView: $isShowingAddPassportView)
-                .presentationDetents([.large])
+                .presentationDetents([.medium])
+                .onDisappear {
+                    if let newPassport = passports.last {
+                        NotificationManager.shared.schedulePassportNotifications(for: newPassport)
+                    }
+                }
         }
         .sheet(isPresented: $isShowingAddVisaView) {
             AddVisaView(isShowingAddVisaView: $isShowingAddVisaView)
                 .presentationDetents([.large])
+                .onDisappear {
+                    if let newVisa = visas.last {
+                        NotificationManager.shared.scheduleVisaNotifications(for: newVisa)
+                    }
+                }
         }
     }
     
